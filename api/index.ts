@@ -1,25 +1,12 @@
 import express from 'express';
-import path from 'path';
 import multer from 'multer';
 import { processZipAndCSVFiles } from '../server/utils/fileProcessor';
 import fs from 'fs';
-
-// Ensure temp directory exists
-const tempDir = path.join(process.cwd(), 'server/temp');
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir, { recursive: true });
-}
-
-// Copy JS files to temp directory
-const jsFiles = [
-  'ew-log-viewer.js',
-  'LLWebServerExtended.js',
-  'scriptcustom.js',
-  'envelope-cartesian.js'
-];
+import path from 'path';
 
 // Create Vercel serverless API handler
 const app = express();
+app.use(express.json());
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -73,15 +60,17 @@ app.post('/api/process-files', upload.fields([
   }
 });
 
-// Static file serving for production
+// Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(process.cwd(), 'dist/client');
-  app.use(express.static(clientDist));
+  app.use(express.static('dist'));
   
+  // Handle SPA routing - send all non-API requests to index.html
   app.get('*', (req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
+    if (!req.path.startsWith('/api')) {
+      return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+    }
   });
 }
 
-// For Vercel serverless functions
+// Export handler for Vercel serverless function
 export default app;
