@@ -80,6 +80,130 @@ function findMatchingCSVRow(csvData, nvValue) {
   return null;
 }
 
+/**
+ * Process a checkbox input element with CSV data
+ */
+function processCheckboxElement(element, csvRow) {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a radio input element with CSV data
+ */
+function processRadioElement(element, csvRow) {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set name attribute
+  element.setAttribute("name", `rad-${addressValue}`);
+  
+  // Determine if this is "true" or "false" radio based on value
+  const value = element.getAttribute("value")?.toLowerCase();
+  
+  // Set id with suffix based on true/false value
+  const idSuffix = value === "true" || value === "1" ? "1" : "2";
+  element.setAttribute("id", `rad-ctrl-${addressValue}-${idSuffix}`);
+}
+
+/**
+ * Process a regular input element with CSV data
+ */
+function processInputElement(element, csvRow) {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a select element with CSV data
+ */
+function processSelectElement(element, csvRow) {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a button element with CSV data
+ */
+function processButtonElement(element, csvRow) {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
 // API endpoint for processing files
 app.post('/api/process-files', upload.fields([
   { name: 'zip', maxCount: 1 },
@@ -171,10 +295,130 @@ app.post('/api/process-files', upload.fields([
     let elementsProcessed = 0;
     let attributesAdded = 0;
     
-    // Generate a new ZIP
+    // Process HTML files
+    const filePromises = Object.keys(zip.files).map(async (filename) => {
+      const file = zip.files[filename];
+      
+      // Skip directories and non-HTML files
+      if (file.dir || !filename.toLowerCase().endsWith(".html")) {
+        return file;
+      }
+      
+      try {
+        // Read and parse HTML content
+        const content = await file.async("text");
+        const { window } = new JSDOM(content);
+        const document = window.document;
+        
+        // Update all references from public/ to img/
+        document.querySelectorAll('img[src^="public/"]').forEach(img => {
+          const src = img.getAttribute('src');
+          if (src) img.setAttribute('src', src.replace(/public\//g, 'img/'));
+        });
+        
+        // Update CSS background images in style attributes
+        document.querySelectorAll('[style*="public/"]').forEach(el => {
+          const style = el.getAttribute('style');
+          if (style) el.setAttribute('style', style.replace(/public\//g, 'img/'));
+        });
+        
+        // Update link hrefs
+        document.querySelectorAll('link[href^="public/"]').forEach(link => {
+          const href = link.getAttribute('href');
+          if (href) link.setAttribute('href', href.replace(/public\//g, 'img/'));
+        });
+        
+        // Remove external connections (Google Fonts, unpkg)
+        const externalLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"], link[href*="unpkg.com"]');
+        externalLinks.forEach(link => {
+          link.parentNode?.removeChild(link);
+        });
+        
+        // Add custom code to head
+        const headElement = document.head;
+        const customHeadCode = `
+  <!--custom code 1-->
+  <script type="text/javascript" src="LLWebServerExtended.js"></script>
+  <script type='text/javascript' src='../js/base.js'></script>
+  <link rel='stylesheet' type='text/css' href='../style/common.css'>
+  <!--custom code 2-->
+  <script type="text/javascript" src="ew-log-viewer.js"></script>
+  <script type="text/javascript" src="envelope-cartesian.js"></script>
+  `;
+        headElement.insertAdjacentHTML('beforeend', customHeadCode);
+        
+        // Add custom code to end of body
+        const bodyElement = document.body;
+        const customBodyCode = `
+  <!--custom code 3-->
+  <script type='text/javascript'>
+      LLWebServer.AutoRefreshStart(1000);
+      showLoginStatus();
+      localStorage.setItem("showNeutralNavbar", true);
+  </script>
+  <script>
+      document.addEventListener('DOMContentLoaded', init);
+  </script>
+  <script
+        defer=""
+        src="scriptcustom.js"
+  ></script>
+  `;
+        bodyElement.insertAdjacentHTML('beforeend', customBodyCode);
+        
+        // Find all elements with nv attribute
+        const elementsWithNvAttr = document.querySelectorAll("[nv]");
+        
+        elementsWithNvAttr.forEach((element) => {
+          const nvValue = element.getAttribute("nv");
+          
+          // Find matching CSV row
+          const matchingRow = findMatchingCSVRow(csvData, nvValue);
+          
+          if (matchingRow) {
+            elementsProcessed++;
+            
+            // Apply appropriate attributes based on element type
+            if (element.tagName === "INPUT") {
+              // Handle input elements
+              const inputType = element.getAttribute("type");
+              
+              if (inputType === "checkbox") {
+                processCheckboxElement(element, matchingRow);
+                attributesAdded += 3;
+              } else if (inputType === "radio") {
+                processRadioElement(element, matchingRow);
+                attributesAdded += 4; // name, data-llweb-par, data-llweb-refresh, id
+              } else {
+                processInputElement(element, matchingRow);
+                attributesAdded += 3;
+              }
+            } else if (element.tagName === "SELECT") {
+              processSelectElement(element, matchingRow);
+              attributesAdded += 3;
+            } else if (element.tagName === "BUTTON") {
+              processButtonElement(element, matchingRow);
+              attributesAdded += 3;
+            }
+          }
+        });
+        
+        // Update file content in ZIP
+        return zip.file(filename, "<!DOCTYPE html>\n" + document.documentElement.outerHTML);
+      } catch (error) {
+        console.error(`Error processing file ${filename}:`, error);
+        return file; // Return the original file if there was an error
+      }
+    });
+    
+    // Wait for all files to be processed
+    await Promise.all(filePromises);
+    
+    // Generate a new ZIP with the name website.zip
     const modifiedZipBuffer = await zip.generateAsync({
       type: "nodebuffer",
-      compression: "DEFLATE"
+      compression: "DEFLATE",
+      comment: "Generated website package"
     });
     
     // Return results
