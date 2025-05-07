@@ -1,61 +1,71 @@
 import express from 'express';
-import path from 'path';
 import multer from 'multer';
-import { processZipAndCSVFiles } from '../server/utils/fileProcessor';
+import JSZip from 'jszip';
+import Papa from 'papaparse';
+import { JSDOM } from 'jsdom';
 
 // Create Vercel serverless API handler
 const app = express();
 app.use(express.json());
 
-// Configure multer for file uploads (use memory storage to avoid filesystem issues)
+// Configure multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage,
   limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
 
-// Log middleware for debugging requests
-app.use((req, res, next) => {
-  console.log('Request headers:', req.headers);
-  console.log('Has body?', !!req.body);
-  next();
-});
+// Basic JS content for scripts
+const JS_CONTENT = {
+  "LLWebServerExtended.js": `const LLWebServer = { AutoRefreshStart: function(i){} }; function showLoginStatus() {}`,
+  "envelope-cartesian.js": `function init() {}`,
+  "ew-log-viewer.js": `console.log('Log viewer loaded');`,
+  "scriptcustom.js": `console.log('Custom script loaded');`
+};
 
 // API endpoint for processing files
 app.post('/api/process-files', upload.fields([
   { name: 'zip', maxCount: 1 },
   { name: 'csv', maxCount: 10 }
 ]), async (req, res) => {
-  console.log('Processing files request received');
-  console.log('Request body keys:', Object.keys(req.body || {}));
-  
   try {
+    // Simple validation
     if (!req.files) {
       return res.status(400).json({ error: 'No files uploaded' });
     }
     
-    // Multer types handling
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    console.log('Received files:', Object.keys(files).join(', '));
-
     const zipFile = files['zip']?.[0];
-    const csvFiles = files['csv'];
-
+    const csvFiles = files['csv'] || [];
+    
     if (!zipFile) {
       return res.status(400).json({ error: 'ZIP file is required' });
     }
-
-    const result = await processZipAndCSVFiles(zipFile, csvFiles || []);
     
-    // Set the correct headers for zip file download
-    res.setHeader('Content-Type', 'application/json');
+    // Simply extract and reconstruct the ZIP
+    const zip = await JSZip.loadAsync(zipFile.buffer);
     
+    // Add JS files 
+    for (const [filename, content] of Object.entries(JS_CONTENT)) {
+      zip.file(filename, content);
+    }
+    
+    // Generate a new ZIP
+    const modifiedZipBuffer = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE"
+    });
+    
+    // Return results
     return res.json({
-      zipBuffer: result.zipBuffer,
-      stats: result.stats
+      zipBuffer: modifiedZipBuffer,
+      stats: {
+        elementsProcessed: 0,
+        attributesAdded: 0
+      }
     });
   } catch (error) {
-    console.error('Error processing files:', error);
+    console.error('Error:', error);
     return res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Unknown error' 
     });
@@ -65,13 +75,6 @@ app.post('/api/process-files', upload.fields([
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static('dist'));
-  
-  // Handle SPA routing - send all non-API requests to index.html
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      return res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
-    }
-  });
 }
 
 // Export handler for Vercel serverless function
