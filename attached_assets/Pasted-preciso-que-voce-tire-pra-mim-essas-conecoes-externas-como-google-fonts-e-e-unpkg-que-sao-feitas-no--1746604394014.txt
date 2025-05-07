@@ -1,0 +1,41 @@
+preciso que voce tire pra mim essas conecoes externas como google fonts e e unpkg que sao feitas no html pois nao uso ela e elas so me dao erros por exemplo essas: 
+ <link rel="stylesheet" href="https://unpkg.com/animate.css@4.1.1/animate.css">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&amp;display=swap"
+    data-tag="font">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap"
+    data-tag="font">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&amp;display=swap"
+    data-tag="font">
+  <link rel="stylesheet" href="https://unpkg.com/@teleporthq/teleport-custom-scripts/dist/style.css">
+
+depois preciso tambem que o zip que è baixado apos o processamento seja chamado de "website.zip" 
+
+preciso tambem que o site que faz o processamento seja em ingles agora ele ta em portugues 
+
+preciso tambem que voce insira esse codigo dentro de todos os files html do projeto no Header 
+<!--custom code 1-->
+<script type="text/javascript" src="LLWebServerExtended.js"></script>
+<script type='text/javascript' src='../js/base.js'></script>
+<link rel='stylesheet' type='text/css' href='../style/common.css'>
+<!--custom code 2-->
+<script type="text/javascript" src="ew-log-viewer.js"></script>
+<script type="text/javascript" src="envelope-cartesian.js"></script>
+
+e esse aqui no fim do body 
+
+<!--custom code 3-->
+<script type='text/javascript'>
+    LLWebServer.AutoRefreshStart(1000);
+    showLoginStatus();
+    localStorage.setItem("showNeutralNavbar", true);
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+<script
+      defer=""
+      src="scriptcustom.js"
+></script>

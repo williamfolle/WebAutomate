@@ -1,0 +1,522 @@
+// server/index.ts
+import express2 from "express";
+
+// server/routes.ts
+import { createServer } from "http";
+import multer from "multer";
+
+// server/utils/fileProcessor.ts
+import JSZip from "jszip";
+import Papa from "papaparse";
+import { JSDOM } from "jsdom";
+import fs from "fs";
+import path from "path";
+async function processZipAndCSVFiles(zipFile, csvFiles) {
+  try {
+    console.log("ZIP file:", zipFile ? zipFile.originalname : "undefined");
+    console.log("CSV files count:", csvFiles ? csvFiles.length : "undefined");
+    const csvData = await parseCSVFiles(csvFiles);
+    if (!zipFile || !zipFile.buffer) {
+      throw new Error("Invalid or missing ZIP file");
+    }
+    console.log("Loading ZIP file with buffer size:", zipFile.buffer.length);
+    const zip = await JSZip.loadAsync(zipFile.buffer);
+    Object.keys(zip.files).forEach((filename) => {
+      if (filename === "404.html" || filename === "404.css") {
+        zip.remove(filename);
+      }
+    });
+    try {
+      const jsFiles = [
+        "ew-log-viewer.js",
+        "LLWebServerExtended.js",
+        "scriptcustom.js",
+        "envelope-cartesian.js"
+      ];
+      for (const jsFile of jsFiles) {
+        const filePath = path.join(process.cwd(), "server/temp", jsFile);
+        if (fs.existsSync(filePath)) {
+          const fileContent = fs.readFileSync(filePath);
+          zip.file(jsFile, fileContent);
+        }
+      }
+    } catch (error) {
+      console.error("Error adding JS files:", error);
+    }
+    const publicFiles = Object.keys(zip.files).filter(
+      (filename) => filename.startsWith("public/") || filename === "public"
+    );
+    if (publicFiles.length > 0) {
+      console.log("Found public folder, renaming to img/");
+      const copyPromises = publicFiles.map(async (publicPath) => {
+        const file = zip.files[publicPath];
+        if (!file) return;
+        const imgPath = publicPath === "public" ? "img" : publicPath.replace("public/", "img/");
+        if (file.dir) {
+          zip.folder(imgPath);
+        } else {
+          try {
+            const content = await file.async("arraybuffer");
+            zip.file(imgPath, content);
+          } catch (error) {
+            console.error(`Error copying file ${publicPath} to ${imgPath}:`, error);
+          }
+        }
+      });
+      await Promise.all(copyPromises);
+      for (const publicPath of publicFiles) {
+        zip.remove(publicPath);
+      }
+      console.log("Renamed public/ folder to img/");
+    }
+    let elementsProcessed = 0;
+    let attributesAdded = 0;
+    const cssFilesPromises = Object.keys(zip.files).filter(
+      (filename) => filename.toLowerCase().endsWith(".css") && !zip.files[filename].dir
+    ).map(async (filename) => {
+      const file = zip.files[filename];
+      const content = await file.async("text");
+      const updatedContent = content.replace(/public\//g, "img/");
+      zip.file(filename, updatedContent);
+    });
+    await Promise.all(cssFilesPromises);
+    console.log("Processed CSS files to update public/ to img/ references");
+    const filePromises = Object.keys(zip.files).map(async (filename) => {
+      const file = zip.files[filename];
+      if (file.dir || !filename.toLowerCase().endsWith(".html")) {
+        return file;
+      }
+      const content = await file.async("text");
+      const { window } = new JSDOM(content);
+      const document = window.document;
+      const updatePublicToImgPaths = (element) => {
+        element.querySelectorAll('img[src^="public/"]').forEach((img) => {
+          const src = img.getAttribute("src");
+          if (src) img.setAttribute("src", src.replace(/public\//g, "img/"));
+        });
+        element.querySelectorAll('[style*="public/"]').forEach((el) => {
+          const style = el.getAttribute("style");
+          if (style) el.setAttribute("style", style.replace(/public\//g, "img/"));
+        });
+        element.querySelectorAll('link[href^="public/"]').forEach((link) => {
+          const href = link.getAttribute("href");
+          if (href) link.setAttribute("href", href.replace(/public\//g, "img/"));
+        });
+        element.querySelectorAll('[src^="public/"]').forEach((el) => {
+          const src = el.getAttribute("src");
+          if (src) el.setAttribute("src", src.replace(/public\//g, "img/"));
+        });
+        element.querySelectorAll('[background^="public/"]').forEach((el) => {
+          const bg = el.getAttribute("background");
+          if (bg) el.setAttribute("background", bg.replace(/public\//g, "img/"));
+        });
+        element.querySelectorAll("style").forEach((style) => {
+          if (style.textContent) {
+            style.textContent = style.textContent.replace(/public\//g, "img/");
+          }
+        });
+        element.querySelectorAll('[data-background^="public/"]').forEach((el) => {
+          const bg = el.getAttribute("data-background");
+          if (bg) el.setAttribute("data-background", bg.replace(/public\//g, "img/"));
+        });
+      };
+      updatePublicToImgPaths(document);
+      const externalLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"], link[href*="unpkg.com"]');
+      externalLinks.forEach((link) => {
+        link.parentNode?.removeChild(link);
+      });
+      const headElement = document.head;
+      const customHeadCode = `
+<!--custom code 1-->
+<script type="text/javascript" src="LLWebServerExtended.js"></script>
+<script type='text/javascript' src='../js/base.js'></script>
+<link rel='stylesheet' type='text/css' href='../style/common.css'>
+<!--custom code 2-->
+<script type="text/javascript" src="ew-log-viewer.js"></script>
+<script type="text/javascript" src="envelope-cartesian.js"></script>
+`;
+      headElement.insertAdjacentHTML("beforeend", customHeadCode);
+      const bodyElement = document.body;
+      const customBodyCode = `
+<!--custom code 3-->
+<script type='text/javascript'>
+    LLWebServer.AutoRefreshStart(1000);
+    showLoginStatus();
+    localStorage.setItem("showNeutralNavbar", true);
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+<script
+      defer=""
+      src="scriptcustom.js"
+></script>
+`;
+      bodyElement.insertAdjacentHTML("beforeend", customBodyCode);
+      const elementsWithNvAttr = document.querySelectorAll("[nv]");
+      elementsWithNvAttr.forEach((element) => {
+        const nvValue = element.getAttribute("nv");
+        const matchingRow = findMatchingCSVRow(csvData, nvValue);
+        if (matchingRow) {
+          elementsProcessed++;
+          if (element.tagName === "INPUT") {
+            const inputElement = element;
+            const inputType = inputElement.getAttribute("type");
+            if (inputType === "checkbox") {
+              processCheckboxElement(inputElement, matchingRow);
+              attributesAdded += 3;
+            } else if (inputType === "radio") {
+              processRadioElement(inputElement, matchingRow);
+              attributesAdded += 4;
+            } else {
+              processInputElement(inputElement, matchingRow);
+              attributesAdded += 3;
+            }
+          } else if (element.tagName === "SELECT") {
+            processSelectElement(element, matchingRow);
+            attributesAdded += 3;
+          } else if (element.tagName === "BUTTON") {
+            processButtonElement(element, matchingRow);
+            attributesAdded += 3;
+          }
+        }
+      });
+      return zip.file(filename, "<!DOCTYPE html>\n" + document.documentElement.outerHTML);
+    });
+    await Promise.all(filePromises);
+    const modifiedZipBuffer = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE"
+    });
+    return {
+      zipBuffer: modifiedZipBuffer,
+      stats: {
+        elementsProcessed,
+        attributesAdded
+      }
+    };
+  } catch (error) {
+    console.error("Error processing files:", error);
+    throw new Error(`Error processing files: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+async function parseCSVFiles(csvFiles) {
+  const allData = [];
+  if (!csvFiles || csvFiles.length === 0) {
+    console.log("No CSV files provided");
+    return allData;
+  }
+  console.log(`Processing ${csvFiles.length} CSV files`);
+  const csvPromises = csvFiles.map((file) => {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.buffer) {
+        console.error("Invalid CSV file or missing buffer:", file?.originalname || "unknown file");
+        resolve();
+        return;
+      }
+      console.log(`Parsing CSV file: ${file.originalname}, buffer size: ${file.buffer.length}`);
+      Papa.parse(file.buffer.toString(), {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) => header.trim(),
+        complete: (results) => {
+          console.log(`CSV parse complete for ${file.originalname}, rows: ${results.data?.length}, columns: ${Object.keys(results.data[0] || {}).join(", ")}`);
+          if (results.data && Array.isArray(results.data)) {
+            results.data.forEach((row, rowIndex) => {
+              const normalizedRow = {};
+              Object.keys(row).forEach((key) => {
+                normalizedRow[key.toLowerCase()] = row[key];
+              });
+              const name = normalizedRow.name || row.Name || row.NAME;
+              const address = normalizedRow.address || row.Address || row.ADDRESS;
+              if (name && address) {
+                const format = normalizedRow.format || row.Format || row.FORMAT || "";
+                console.log(`Row ${rowIndex}: Found name=${name}, address=${address}, format=${format}`);
+                allData.push({
+                  name,
+                  address,
+                  format
+                });
+              } else {
+                console.log(`Row ${rowIndex}: Skipping - missing required columns. name=${name}, address=${address}`);
+              }
+            });
+            resolve();
+          } else {
+            reject(new Error(`Invalid CSV format in file ${file.originalname}`));
+          }
+        },
+        error: (error) => {
+          console.error(`Error parsing CSV ${file.originalname}:`, error);
+          reject(new Error(`Error parsing CSV ${file.originalname}: ${error.message}`));
+        }
+      });
+    });
+  });
+  await Promise.all(csvPromises);
+  console.log(`Total CSV rows processed: ${allData.length}`);
+  return allData;
+}
+function findMatchingCSVRow(csvData, nvValue) {
+  if (!nvValue) return void 0;
+  return csvData.find((row) => row.name === nvValue);
+}
+function processInputElement(element, csvRow) {
+  element.setAttribute("data-llweb-par", csvRow.address);
+  element.setAttribute("data-llweb-refresh", "true");
+  element.setAttribute("id", `txt-ctrl-${csvRow.address}`);
+  if (csvRow.format) {
+    applyFormatAttribute(element, csvRow.format);
+  }
+}
+function processCheckboxElement(element, csvRow) {
+  element.setAttribute("data-llweb-par", csvRow.address);
+  element.setAttribute("data-llweb-refresh", "true");
+  element.setAttribute("id", `chk-ctrl-${csvRow.address}`);
+}
+function processSelectElement(element, csvRow) {
+  element.setAttribute("data-llweb-par", csvRow.address);
+  element.setAttribute("data-llweb-refresh", "true");
+  element.setAttribute("id", `sel-ctrl-${csvRow.address}`);
+}
+function processButtonElement(element, csvRow) {
+  element.setAttribute("data-llweb-par", csvRow.address);
+  element.setAttribute("data-llweb-refresh", "true");
+  const value = element.getAttribute("value");
+  if (value === "true") {
+    element.setAttribute("id", `btn-ctrl-${csvRow.address}-1`);
+  } else if (value === "false") {
+    element.setAttribute("id", `btn-ctrl-${csvRow.address}-2`);
+  }
+}
+function processRadioElement(element, csvRow) {
+  element.setAttribute("data-llweb-par", csvRow.address);
+  element.setAttribute("name", `rad-${csvRow.address}`);
+  element.setAttribute("data-llweb-refresh", "true");
+  const value = element.getAttribute("value");
+  if (value === "true") {
+    element.setAttribute("id", `rad-ctrl-${csvRow.address}-1`);
+  } else if (value === "false") {
+    element.setAttribute("id", `rad-ctrl-${csvRow.address}-2`);
+  }
+}
+function applyFormatAttribute(element, format) {
+  switch (format) {
+    case "xxx.y":
+      element.setAttribute("data-llweb-format", "%.1D");
+      break;
+    case "xx.yy":
+      element.setAttribute("data-llweb-format", "%.2D");
+      break;
+    case "x.yyy":
+      element.setAttribute("data-llweb-format", "%.3D");
+      break;
+    case "%04x":
+      element.setAttribute("data-llweb-format", "%04x");
+      break;
+    case "HH:MM":
+      element.setAttribute("data-llweb-format", "HH:MM");
+      break;
+  }
+}
+
+// server/routes.ts
+var storage = multer.memoryStorage();
+var upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024
+    // 50MB limit
+  }
+});
+async function registerRoutes(app2) {
+  app2.post("/api/process-files", (req, res, next) => {
+    console.log("Before multer middleware");
+    console.log("Request headers:", JSON.stringify(req.headers));
+    console.log("Has body?", !!req.body);
+    next();
+  }, upload.fields([
+    { name: "zip", maxCount: 1 },
+    { name: "csv", maxCount: 10 }
+  ]), async (req, res) => {
+    try {
+      console.log("Processing files request received");
+      console.log("Request body keys:", Object.keys(req.body || {}));
+      if (!req.files) {
+        console.log("No files in request.files");
+        return res.status(400).json({ message: "No files were uploaded" });
+      }
+      const files = req.files;
+      console.log("Received files:", Object.keys(files).join(", "));
+      console.log("Request headers:", JSON.stringify(req.headers));
+      if (!files.zip || files.zip.length === 0) {
+        return res.status(400).json({ message: "ZIP file is required" });
+      }
+      if (!files.csv || files.csv.length === 0) {
+        return res.status(400).json({ message: "At least one CSV file is required" });
+      }
+      console.log("ZIP file:", files.zip[0].originalname);
+      console.log("CSV files:", files.csv.map((f) => f.originalname).join(", "));
+      const result = await processZipAndCSVFiles(files.zip[0], files.csv);
+      return res.json(result);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error processing files";
+      return res.status(500).json({ message: errorMessage });
+    }
+  });
+  const httpServer = createServer(app2);
+  return httpServer;
+}
+
+// server/vite.ts
+import express from "express";
+import fs2 from "fs";
+import path3 from "path";
+import { createServer as createViteServer, createLogger } from "vite";
+
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path2 from "path";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+var vite_config_default = defineConfig({
+  plugins: [
+    react(),
+    runtimeErrorOverlay(),
+    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
+      await import("@replit/vite-plugin-cartographer").then(
+        (m) => m.cartographer()
+      )
+    ] : []
+  ],
+  resolve: {
+    alias: {
+      "@": path2.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path2.resolve(import.meta.dirname, "shared"),
+      "@assets": path2.resolve(import.meta.dirname, "attached_assets")
+    }
+  },
+  root: path2.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path2.resolve(import.meta.dirname, "dist/public"),
+    emptyOutDir: true
+  }
+});
+
+// server/vite.ts
+import { nanoid } from "nanoid";
+var viteLogger = createLogger();
+function log(message, source = "express") {
+  const formattedTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+async function setupVite(app2, server) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
+    allowedHosts: true
+  };
+  const vite = await createViteServer({
+    ...vite_config_default,
+    configFile: false,
+    customLogger: {
+      ...viteLogger,
+      error: (msg, options) => {
+        viteLogger.error(msg, options);
+        process.exit(1);
+      }
+    },
+    server: serverOptions,
+    appType: "custom"
+  });
+  app2.use(vite.middlewares);
+  app2.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    try {
+      const clientTemplate = path3.resolve(
+        import.meta.dirname,
+        "..",
+        "client",
+        "index.html"
+      );
+      let template = await fs2.promises.readFile(clientTemplate, "utf-8");
+      template = template.replace(
+        `src="/src/main.tsx"`,
+        `src="/src/main.tsx?v=${nanoid()}"`
+      );
+      const page = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (e) {
+      vite.ssrFixStacktrace(e);
+      next(e);
+    }
+  });
+}
+function serveStatic(app2) {
+  const distPath = path3.resolve(import.meta.dirname, "public");
+  if (!fs2.existsSync(distPath)) {
+    throw new Error(
+      `Could not find the build directory: ${distPath}, make sure to build the client first`
+    );
+  }
+  app2.use(express.static(distPath));
+  app2.use("*", (_req, res) => {
+    res.sendFile(path3.resolve(distPath, "index.html"));
+  });
+}
+
+// server/index.ts
+var app = express2();
+app.use(express2.json());
+app.use(express2.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path4 = req.path;
+  let capturedJsonResponse = void 0;
+  const originalResJson = res.json;
+  res.json = function(bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path4.startsWith("/api")) {
+      let logLine = `${req.method} ${path4} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "\u2026";
+      }
+      log(logLine);
+    }
+  });
+  next();
+});
+(async () => {
+  const server = await registerRoutes(app);
+  app.use((err, _req, res, _next) => {
+    console.error("Global Error Handler:", err);
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    return res.status(status).json({ message });
+  });
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+  const port = 5e3;
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();

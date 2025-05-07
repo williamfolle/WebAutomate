@@ -1,0 +1,55 @@
+Objetivo: Criar um website dinâmico com design bonito e intuitivo, otimizado para hospedagem na Vercel, que receba um arquivo ZIP contendo a estrutura do site e manipule seus elementos HTML com dados de arquivos CSV.
+Entradas Obrigatórias:
+1.	Arquivo ZIP: Contém a estrutura completa de um website (HTML, CSS, JavaScript, imagens, etc.).
+2.	Arquivo(s) CSV: Contém dados para manipular o website. É obrigatório pelo menos um arquivo CSV. Cada arquivo CSV deve conter as colunas: "Name" e "Adress". Opcionalmente, pode conter a coluna "Format".
+Processamento Principal:
+1.	Atributo Customizado "nv":
+o	No momento da criação de cada elemento HTML no website, um atributo customizado chamado nv será inserido manualmente.
+o	O valor desse atributo nv corresponderá a um dos valores da coluna "Name" presente nos arquivos CSV.
+2.	Manipulação de Elementos HTML com Atributo "nv":
+o	Condição: Se um elemento HTML possuir o atributo nv, o seguinte processamento será aplicado:
+o	Para elementos <input>:
+	Localizar a linha no(s) arquivo(s) CSV onde a coluna "Name" é igual ao valor do atributo nv.
+	Adicionar o atributo customizado data-llweb-par com o valor correspondente da coluna "Adress" dessa linha do CSV.
+	Adicionar o atributo data-llweb-refresh="true".
+	Definir o atributo id do elemento como "txt-ctrl-" + [valor da coluna "Adress"].
+	Formatação (Opcional): Se a mesma linha do CSV possuir um valor na coluna "Format", aplicar a seguinte lógica: 
+	Se o valor em "Format" for xxx.y, adicionar o atributo data-llweb-format="%.1D".
+	Se o valor em "Format" for xx.yy, adicionar o atributo data-llweb-format="%.2D".
+	Se o valor em "Format" for x.yyy, adicionar o atributo data-llweb-format="%.3D".
+	Se o valor em "Format" for %04x, adicionar o atributo data-llweb-format="%04x".
+	Se o valor em "Format" for HH:MM, adicionar o atributo data-llweb-format="HH:MM".
+	Se a coluna "Format" estiver vazia para a linha correspondente, nenhum atributo data-llweb-format deve ser adicionado.
+o	Para elementos <input type="checkbox">:
+	Localizar a linha no(s) arquivo(s) CSV onde a coluna "Name" é igual ao valor do atributo nv.
+	Adicionar o atributo customizado data-llweb-par com o valor correspondente da coluna "Adress" dessa linha do CSV.
+	Adicionar o atributo data-llweb-refresh="true".
+	Definir o atributo id do elemento como "chk-ctrl-" + [valor da coluna "Adress"].
+o	Para elementos <select>:
+	Localizar a linha no(s) arquivo(s) CSV onde a coluna "Name" é igual ao valor do atributo nv.
+	Adicionar o atributo customizado data-llweb-par com o valor correspondente da coluna "Adress" dessa linha do CSV.
+	Adicionar o atributo data-llweb-refresh="true".
+	Definir o atributo id do elemento como "sel-ctrl-" + [valor da coluna "Adress"].
+o	Para elementos <button>:
+	Localizar a linha no(s) arquivo(s) CSV onde a coluna "Name" é igual ao valor do atributo nv.
+	Adicionar o atributo customizado data-llweb-par com o valor correspondente da coluna "Adress" dessa linha do CSV.
+	Adicionar o atributo data-llweb-refresh="true".
+	ID e Value: 
+	Se o atributo value do elemento <button> for "true" (case-sensitive), definir o atributo id como "btn-ctrl-" + [valor da coluna "Adress"] + "-1".
+	Se o atributo value do elemento <button> for "false" (case-sensitive), definir o atributo id como "btn-ctrl-" + [valor da coluna "Adress"] + "-2".
+o	Para elementos <input type="radio">:
+	Localizar a linha no(s) arquivo(s) CSV onde a coluna "Name" é igual ao valor do atributo nv.
+	Adicionar o atributo customizado data-llweb-par com o valor correspondente da coluna "Adress" dessa linha do CSV.
+	Definir o atributo name como "rad-" + [valor da coluna "Adress"].
+	ID e Value: 
+	Se o elemento possuir um atributo value igual a "true" (case-sensitive), definir o atributo id como "rad-ctrl-" + [valor da coluna "Adress"] + "-1".
+	Se o elemento possuir um atributo value igual a "false" (case-sensitive), definir o atributo id como "rad-ctrl-" + [valor da coluna "Adress"] + "-2".
+Requisitos de Design e Hospedagem na Vercel:
+•	Design: O website resultante deve ter um design visualmente atraente e uma interface de usuário intuitiva, facilitando a interação com os elementos manipulados. Considere a usabilidade e a responsividade para diferentes dispositivos.
+•	Otimização para Vercel: A estrutura do projeto e as tecnologias utilizadas devem ser compatíveis com a Vercel para uma implantação fácil e eficiente. Isso geralmente envolve: 
+o	Uma estrutura de projeto bem definida (por exemplo, com um arquivo index.html na raiz ou dentro de um diretório public).
+o	Utilização de tecnologias suportadas pela Vercel (HTML, CSS, JavaScript puro ou frameworks como React, Next.js, etc. - considerando que a manipulação será feita pela IA, a escolha da tecnologia para o website original no ZIP pode influenciar aqui).
+o	Ausência de dependências de servidor backend complexas (a lógica principal de manipulação está no front-end).
+o	Se houver necessidade de alguma lógica de backend simples, considerar as Serverless Functions da Vercel.
+Formato de Saída Esperado:
+Para saida quero um arquivo zip que contem o website que agora contem os atributos customizado que è baixado no pc do usuario quando ele aperta um botao
