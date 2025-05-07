@@ -25,18 +25,15 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "dist"),  // Mudei de dist/public para dist
     emptyOutDir: true,
-  },
-  build: {
-  rollupOptions: {
-    output: {
-      format: 'iife', 
-      entryFileNames: 'assets/[name]-[hash].js',
-      chunkFileNames: 'assets/[name]-[hash].js',
-      assetFileNames: 'assets/[name]-[hash].[ext]'
+    rollupOptions: {
+      output: {
+        format: 'iife', 
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
     }
   }
-}
 });
-
