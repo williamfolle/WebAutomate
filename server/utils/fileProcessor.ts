@@ -2,8 +2,242 @@ import JSZip from "jszip";
 import Papa from "papaparse";
 import { JSDOM } from "jsdom";
 import { ProcessingResult, CSVData } from "@shared/types";
-import fs from "fs";
 import path from "path";
+
+// Store the JS scripts as embedded strings for Vercel deployment
+const EMBEDDED_SCRIPTS = {
+  'LLWebServerExtended.js': `/*****************
+* LLWebServer    *
+* Version 1.2.0 **
+* 2025/02/14     *
+*******************/
+
+// Simplified version for the web generator
+const LLWebServer = {
+  AutoRefreshStart: function(interval) {
+    console.log('AutoRefresh started with interval:', interval);
+  }
+};
+
+function showLoginStatus() {
+  console.log('Login status shown');
+}`,
+
+  'ew-log-viewer.js': `// Simplified log viewer script
+console.log('Log viewer initialized');`,
+
+  'envelope-cartesian.js': `// Simplified envelope-cartesian script
+function init() {
+  console.log('Envelope cartesian initialized');
+}`,
+
+  'scriptcustom.js': `// Custom script for the application
+console.log('Custom script loaded');`
+};
+
+/**
+ * Parse multiple CSV files and return their data
+ */
+async function parseCSVFiles(csvFiles: Express.Multer.File[]): Promise<CSVData[]> {
+  try {
+    if (!csvFiles || csvFiles.length === 0) {
+      return [];
+    }
+
+    const parsedData: CSVData[] = [];
+
+    for (const csvFile of csvFiles) {
+      const content = csvFile.buffer.toString('utf8');
+      
+      const parseResult = Papa.parse(content, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      if (parseResult.data && parseResult.data.length > 0) {
+        parsedData.push({
+          filename: csvFile.originalname,
+          data: parseResult.data as Record<string, string>[],
+        });
+      }
+    }
+
+    return parsedData;
+  } catch (error) {
+    console.error("Error parsing CSV files:", error);
+    throw new Error("Failed to parse CSV files");
+  }
+}
+
+/**
+ * Find a matching row in the CSV data based on the NV value
+ */
+function findMatchingCSVRow(
+  csvData: CSVData[],
+  nvValue: string | null
+): Record<string, string> | null {
+  if (!nvValue || !csvData || csvData.length === 0) {
+    return null;
+  }
+
+  // Convert nvValue to lowercase for case-insensitive matching
+  const lowerNvValue = nvValue.toLowerCase();
+
+  // Try to find a match across all CSV files
+  for (const csv of csvData) {
+    for (const row of csv.data) {
+      // Case-insensitive match for either "Address" or any key containing "address"
+      const addressKey = Object.keys(row).find(key => 
+        key.toLowerCase() === "address" || key.toLowerCase().includes("address")
+      );
+
+      if (addressKey && row[addressKey].toLowerCase() === lowerNvValue) {
+        return row;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Process a checkbox input element with CSV data
+ */
+function processCheckboxElement(
+  element: HTMLInputElement,
+  csvRow: Record<string, string>
+): void {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a radio input element with CSV data
+ */
+function processRadioElement(
+  element: HTMLInputElement,
+  csvRow: Record<string, string>
+): void {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set name attribute
+  element.setAttribute("name", `rad-${addressValue}`);
+  
+  // Determine if this is "true" or "false" radio based on value
+  const value = element.getAttribute("value")?.toLowerCase();
+  
+  // Set id with suffix based on true/false value
+  const idSuffix = value === "true" || value === "1" ? "1" : "2";
+  element.setAttribute("id", `rad-ctrl-${addressValue}-${idSuffix}`);
+}
+
+/**
+ * Process a regular input element with CSV data
+ */
+function processInputElement(
+  element: HTMLInputElement,
+  csvRow: Record<string, string>
+): void {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a select element with CSV data
+ */
+function processSelectElement(
+  element: HTMLSelectElement,
+  csvRow: Record<string, string>
+): void {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
+
+/**
+ * Process a button element with CSV data
+ */
+function processButtonElement(
+  element: HTMLButtonElement,
+  csvRow: Record<string, string>
+): void {
+  const addressValue = element.getAttribute("nv");
+  if (!addressValue) return;
+
+  // Set data-llweb-par attribute
+  element.setAttribute("data-llweb-par", addressValue);
+  
+  // Set data-llweb-refresh attribute
+  element.setAttribute("data-llweb-refresh", "true");
+  
+  // Set data-llweb-format attribute with the format (default to empty string)
+  const formatKey = Object.keys(csvRow).find(key => 
+    key.toLowerCase() === "format" || key.toLowerCase().includes("format")
+  );
+  
+  if (formatKey && csvRow[formatKey]) {
+    element.setAttribute("data-llweb-format", csvRow[formatKey]);
+  } else {
+    element.setAttribute("data-llweb-format", "");
+  }
+}
 
 /**
  * Process ZIP and CSV files to add custom attributes to HTML elements
@@ -34,25 +268,10 @@ export async function processZipAndCSVFiles(
       }
     });
     
-    // Add JS files to the ZIP
-    try {
-      // Read JS files from temp directory
-      const jsFiles = [
-        'ew-log-viewer.js',
-        'LLWebServerExtended.js',
-        'scriptcustom.js',
-        'envelope-cartesian.js'
-      ];
-      
-      for (const jsFile of jsFiles) {
-        const filePath = path.join(process.cwd(), 'server/temp', jsFile);
-        if (fs.existsSync(filePath)) {
-          const fileContent = fs.readFileSync(filePath);
-          zip.file(jsFile, fileContent);
-        }
-      }
-    } catch (error) {
-      console.error("Error adding JS files:", error);
+    // Add JS files to the ZIP using embedded content
+    for (const [filename, content] of Object.entries(EMBEDDED_SCRIPTS)) {
+      zip.file(filename, content);
+      console.log(`Added embedded JS file: ${filename}`);
     }
     
     // Check if public folder exists and handle renaming
@@ -264,6 +483,7 @@ export async function processZipAndCSVFiles(
     const modifiedZipBuffer = await zip.generateAsync({
       type: "nodebuffer",
       compression: "DEFLATE",
+      mimeType: "application/zip"
     });
     
     return {
@@ -276,180 +496,5 @@ export async function processZipAndCSVFiles(
   } catch (error) {
     console.error("Error processing files:", error);
     throw new Error(`Error processing files: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Parse CSV files and return array of data
- */
-async function parseCSVFiles(csvFiles: Express.Multer.File[]): Promise<CSVData[]> {
-  const allData: CSVData[] = [];
-  
-  if (!csvFiles || csvFiles.length === 0) {
-    console.log("No CSV files provided");
-    return allData;
-  }
-  
-  console.log(`Processing ${csvFiles.length} CSV files`);
-  
-  const csvPromises = csvFiles.map((file) => {
-    return new Promise<void>((resolve, reject) => {
-      if (!file || !file.buffer) {
-        console.error("Invalid CSV file or missing buffer:", file?.originalname || "unknown file");
-        resolve(); // Skip this file instead of rejecting
-        return;
-      }
-      
-      console.log(`Parsing CSV file: ${file.originalname}, buffer size: ${file.buffer.length}`);
-      // @ts-ignore - Ignorando o erro de tipo aqui, pois o Papa.parse aceita string
-      Papa.parse(file.buffer.toString(), {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header) => header.trim(),
-        complete: (results: Papa.ParseResult<any>) => {
-          console.log(`CSV parse complete for ${file.originalname}, rows: ${results.data?.length}, columns: ${Object.keys(results.data[0] || {}).join(', ')}`);
-          
-          if (results.data && Array.isArray(results.data)) {
-            results.data.forEach((row: any, rowIndex: number) => {
-              // Normalize header keys to handle case-sensitivity
-              const normalizedRow: Record<string, any> = {};
-              Object.keys(row).forEach(key => {
-                normalizedRow[key.toLowerCase()] = row[key];
-              });
-              
-              // Check for required columns case-insensitively
-              const name = normalizedRow.name || row.Name || row.NAME;
-              const address = normalizedRow.address || row.Address || row.ADDRESS;
-              
-              if (name && address) {
-                const format = normalizedRow.format || row.Format || row.FORMAT || "";
-                
-                console.log(`Row ${rowIndex}: Found name=${name}, address=${address}, format=${format}`);
-                
-                allData.push({
-                  name,
-                  address,
-                  format
-                });
-              } else {
-                console.log(`Row ${rowIndex}: Skipping - missing required columns. name=${name}, address=${address}`);
-              }
-            });
-            resolve();
-          } else {
-            reject(new Error(`Invalid CSV format in file ${file.originalname}`));
-          }
-        },
-        error: (error: Papa.ParseError) => {
-          console.error(`Error parsing CSV ${file.originalname}:`, error);
-          reject(new Error(`Error parsing CSV ${file.originalname}: ${error.message}`));
-        }
-      });
-    });
-  });
-  
-  await Promise.all(csvPromises);
-  console.log(`Total CSV rows processed: ${allData.length}`);
-  return allData;
-}
-
-/**
- * Find matching row in CSV data based on nv attribute value
- */
-function findMatchingCSVRow(csvData: CSVData[], nvValue: string | null): CSVData | undefined {
-  if (!nvValue) return undefined;
-  return csvData.find(row => row.name === nvValue);
-}
-
-/**
- * Process input element attributes
- */
-function processInputElement(element: HTMLInputElement, csvRow: CSVData): void {
-  element.setAttribute("data-llweb-par", csvRow.address);
-  element.setAttribute("data-llweb-refresh", "true");
-  element.setAttribute("id", `txt-ctrl-${csvRow.address}`);
-  
-  // Apply format if present
-  if (csvRow.format) {
-    applyFormatAttribute(element, csvRow.format);
-  }
-}
-
-/**
- * Process checkbox element attributes
- */
-function processCheckboxElement(element: HTMLInputElement, csvRow: CSVData): void {
-  element.setAttribute("data-llweb-par", csvRow.address);
-  element.setAttribute("data-llweb-refresh", "true");
-  element.setAttribute("id", `chk-ctrl-${csvRow.address}`);
-}
-
-/**
- * Process select element attributes
- */
-function processSelectElement(element: HTMLSelectElement, csvRow: CSVData): void {
-  element.setAttribute("data-llweb-par", csvRow.address);
-  element.setAttribute("data-llweb-refresh", "true");
-  element.setAttribute("id", `sel-ctrl-${csvRow.address}`);
-}
-
-/**
- * Process button element attributes
- */
-function processButtonElement(element: HTMLButtonElement, csvRow: CSVData): void {
-  element.setAttribute("data-llweb-par", csvRow.address);
-  element.setAttribute("data-llweb-refresh", "true");
-  
-  const value = element.getAttribute("value");
-  if (value === "true") {
-    element.setAttribute("id", `btn-ctrl-${csvRow.address}-1`);
-  } else if (value === "false") {
-    element.setAttribute("id", `btn-ctrl-${csvRow.address}-2`);
-  }
-}
-
-/**
- * Process radio element attributes
- */
-function processRadioElement(element: HTMLInputElement, csvRow: CSVData): void {
-  // Set data-llweb-par attribute
-  element.setAttribute("data-llweb-par", csvRow.address);
-  
-  // Set name attribute for all radio buttons in the same group
-  element.setAttribute("name", `rad-${csvRow.address}`);
-  
-  // Add data-llweb-refresh attribute
-  element.setAttribute("data-llweb-refresh", "true");
-  
-  // Set ID based on value (true/false)
-  const value = element.getAttribute("value");
-  if (value === "true") {
-    element.setAttribute("id", `rad-ctrl-${csvRow.address}-1`);
-  } else if (value === "false") {
-    element.setAttribute("id", `rad-ctrl-${csvRow.address}-2`);
-  }
-}
-
-/**
- * Apply format attribute based on format value
- */
-function applyFormatAttribute(element: HTMLElement, format: string): void {
-  switch (format) {
-    case "xxx.y":
-      element.setAttribute("data-llweb-format", "%.1D");
-      break;
-    case "xx.yy":
-      element.setAttribute("data-llweb-format", "%.2D");
-      break;
-    case "x.yyy":
-      element.setAttribute("data-llweb-format", "%.3D");
-      break;
-    case "%04x":
-      element.setAttribute("data-llweb-format", "%04x");
-      break;
-    case "HH:MM":
-      element.setAttribute("data-llweb-format", "HH:MM");
-      break;
-    // If format is not recognized, don't add any format attribute
   }
 }
