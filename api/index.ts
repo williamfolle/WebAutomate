@@ -1,14 +1,13 @@
 import express from 'express';
+import path from 'path';
 import multer from 'multer';
 import { processZipAndCSVFiles } from '../server/utils/fileProcessor';
-import fs from 'fs';
-import path from 'path';
 
 // Create Vercel serverless API handler
 const app = express();
 app.use(express.json());
 
-// Configure multer for file uploads
+// Configure multer for file uploads (use memory storage to avoid filesystem issues)
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage,
@@ -47,6 +46,9 @@ app.post('/api/process-files', upload.fields([
     }
 
     const result = await processZipAndCSVFiles(zipFile, csvFiles || []);
+    
+    // Set the correct headers for zip file download
+    res.setHeader('Content-Type', 'application/json');
     
     return res.json({
       zipBuffer: result.zipBuffer,
