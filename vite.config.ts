@@ -28,8 +28,7 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
-});
-build: {
+  build: {
   rollupOptions: {
     output: {
       format: 'iife', 
@@ -39,3 +38,5 @@ build: {
     }
   }
 }
+});
+
