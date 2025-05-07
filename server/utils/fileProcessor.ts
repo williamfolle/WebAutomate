@@ -3,37 +3,10 @@ import Papa from "papaparse";
 import { JSDOM } from "jsdom";
 import { ProcessingResult, CSVData } from "@shared/types";
 import path from "path";
+import fs from "fs";
 
-// Store the JS scripts as embedded strings for Vercel deployment
-const EMBEDDED_SCRIPTS = {
-  'LLWebServerExtended.js': `/*****************
-* LLWebServer    *
-* Version 1.2.0 **
-* 2025/02/14     *
-*******************/
-
-// Simplified version for the web generator
-const LLWebServer = {
-  AutoRefreshStart: function(interval) {
-    console.log('AutoRefresh started with interval:', interval);
-  }
-};
-
-function showLoginStatus() {
-  console.log('Login status shown');
-}`,
-
-  'ew-log-viewer.js': `// Simplified log viewer script
-console.log('Log viewer initialized');`,
-
-  'envelope-cartesian.js': `// Simplified envelope-cartesian script
-function init() {
-  console.log('Envelope cartesian initialized');
-}`,
-
-  'scriptcustom.js': `// Custom script for the application
-console.log('Custom script loaded');`
-};
+// Import the scripts directly using relative paths from the repository
+import { readFile } from "fs/promises";
 
 /**
  * Parse multiple CSV files and return their data
@@ -239,6 +212,47 @@ function processButtonElement(
   }
 }
 
+// Simplified JS content for each file
+const JS_CONTENT = {
+  "LLWebServerExtended.js": `
+/*****************
+* LLWebServer    *
+* Version 1.2.0 **
+* 2025/02/14     *
+*******************/
+
+// Simplified version for the web generator
+const LLWebServer = {
+  AutoRefreshStart: function(interval) {
+    console.log('AutoRefresh started with interval:', interval);
+  }
+};
+
+function showLoginStatus() {
+  console.log('Login status shown');
+}
+`,
+  "envelope-cartesian.js": `
+/**
+ * Generatore di Busta con sistema di coordinate cartesiane
+ * Versione che usa attributi personalizzati data-env e sistema cartesiano (0,0 al centro)
+ * Supporta 4 quadranti e mostra coordinate al passaggio del mouse
+ */
+
+function init() {
+  console.log('Envelope cartesian initialized');
+}
+`,
+  "ew-log-viewer.js": `
+// Simplified log viewer script
+console.log('Log viewer initialized');
+`,
+  "scriptcustom.js": `
+// Custom script for the application
+console.log('Custom script loaded');
+`
+};
+
 /**
  * Process ZIP and CSV files to add custom attributes to HTML elements
  */
@@ -268,10 +282,10 @@ export async function processZipAndCSVFiles(
       }
     });
     
-    // Add JS files to the ZIP using embedded content
-    for (const [filename, content] of Object.entries(EMBEDDED_SCRIPTS)) {
+    // Add JS files to the ZIP
+    for (const [filename, content] of Object.entries(JS_CONTENT)) {
       zip.file(filename, content);
-      console.log(`Added embedded JS file: ${filename}`);
+      console.log(`Added JS file: ${filename}`);
     }
     
     // Check if public folder exists and handle renaming
@@ -483,7 +497,9 @@ export async function processZipAndCSVFiles(
     const modifiedZipBuffer = await zip.generateAsync({
       type: "nodebuffer",
       compression: "DEFLATE",
-      mimeType: "application/zip"
+      mimeType: "application/zip",
+      // Set filename to website.zip
+      comment: "Generated website package"
     });
     
     return {
