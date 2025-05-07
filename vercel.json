@@ -1,40 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/process-files",
-      "dest": "api/index.ts"
-    },
-    {
-      "src": "/assets/(.*)\\.js",
-      "headers": {
-        "Content-Type": "application/javascript"
-      },
-      "continue": true
-    },
-    {
-      "src": "/assets/(.*)\\.css",
-      "headers": {
-        "Content-Type": "text/css"
-      },
-      "continue": true
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/" }
   ]
 }
